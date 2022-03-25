@@ -6,6 +6,17 @@ from Modules.utils import *
 from Modules.identifying import *
 # PROBLEME WITH THE DOMAIN ON OUR LIST
 def cli_parser():
+    print("""\
+    
+  ______                   _                 _   __   ___  
+ |  ____|                 | |               | | /_ | / _ \ 
+ | |__ __ _ _ __ _ __ ___ | | __ _ _ __   __| |  | || | | |
+ |  __/ _` | '__| '_ ` _ \| |/ _` | '_ \ / _` |  | || | | |
+ | | | (_| | |  | | | | | | | (_| | | | | (_| |  | || |_| |
+ |_|  \__,_|_|  |_| |_| |_|_|\__,_|_| |_|\__,_|  |_(_)___/ 
+                                                           
+                                                           
+    """)
     parser = argparse.ArgumentParser(
         add_help=True, description="Farmland is a tool to automate the domain discovery"
     )
