@@ -1,6 +1,5 @@
 # Farmland
-pridwen@MACPRO-2039:/mnt/c/Users/Pridwen/PycharmProjects/Farmland$ python3 main.py --help
-
+```
   ______                   _                 _   __   ___
  |  ____|                 | |               | | /_ | / _ \
  | |__ __ _ _ __ _ __ ___ | | __ _ _ __   __| |  | || | | |
@@ -47,3 +46,4 @@ Nmap Options:
 Massdns Options:
   --eyewitness-full, -ef
                         Screenshot on every domains/ports that we gatehered (time consuming)
+```
