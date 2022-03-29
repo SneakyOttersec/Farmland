@@ -12,8 +12,37 @@ class AddressData():
         self.ipAddress = ipAddress
         self.domains = domain
 
+def data_to_urls(data,file_name="tmp_urls.txt"):
+    known_https_ports = ['80', '443', '8443', '8080', '8888']
+    with open(file_name, "w+") as f_temp:
+        for entry in data:
+            if isinstance(entry.domains, list):
+                for domain in entry.domains:
+                    for port in known_https_ports:
+                        if not entry.ipPorts:
+                            f_temp.write(domain + "\n")
+                            break
+                        elif port in entry.ipPorts:
+                            f_temp.write(entry.ipAddress + ":" + port + "\n")
+                            f_temp.write(domain + ":" + port + "\n")
+            else:
+                for port in known_https_ports:
+                    if not entry.ipPorts:
+                        f_temp.write(entry.domains + "\n")
+                        break
+                    elif port in entry.ipPorts:
+                        f_temp.write(entry.ipAddress + ":" + port + "\n")
+                        f_temp.write(entry.domains + ":" + port + "\n")
+    return
+def data_to_ip(data,file_name="tmp_ip.txt"):
+    with open(file_name, "w") as f:
+        for addr in data:
+            f.write(addr.ipAddress + "\n")
+    return
 
-def agregate_data_stage1(args):
+# TODO : Add check for empty json
+def agregate_data_stage1(args,base_domain):
+
     """
     Agregate the data of massscan and dnsrecon
     :param domain:
@@ -21,21 +50,23 @@ def agregate_data_stage1(args):
     :return:
     """
     if args.massdns and args.crt :
-        with open(args.outputdir + "Formatted/" + args.domain + "_dnsrecon_crt.json" ) as f1, open(args.outputdir + "Formatted/" + args.domain + "_massdns_output.json") as f2:
+        with open(args.outputdir + args.domain + "/Formatted/" + args.domain + "_dnsrecon_crt.json" ) as f1, open(args.outputdir + args.domain + "/Formatted/" + args.domain + "_massdns_output.json") as f2:
             data1 = json.load(f1)
             data2 = json.load(f2)
             g_data = sorted(data1 + data2, key=lambda x: x[0], reverse=False)
     if args.massdns and not args.crt:
-        with open(args.outputdir + "Formatted/" + args.domain + "_massdns_output.json") as f2:
+        with open(args.outputdir + args.domain + "/Formatted/" + args.domain + "_massdns_output.json") as f2:
             data2 = json.load(f2)
             g_data = sorted(data2,key=lambda x:x[0],reverse=False)
     if not args.massdns and args.crt :
-        with open(args.outputdir + "Formatted/" + args.domain + "_dnsrecon_crt.json") as f1:
+        with open(args.outputdir + args.domain + "/Formatted/" + args.domain + "_dnsrecon_crt.json") as f1:
             data1 = json.load(f1)
             g_data = sorted(data1 , key=lambda x: x[0], reverse=False)
 
     dup = set()
     new_g_data = []
+    for entry in base_domain[1]:
+        g_data.append((base_domain[0],entry))
     for data in g_data:
         t = tuple(data)
         if t not in dup:
@@ -51,8 +82,8 @@ def agregate_data_stage2(ip_list,args):
     :return:
     """
     listipmetdata = []
-    masscan_json = args.outputdir + "Formatted/" + args.domain + "_massscan.json"
-    nmap_json = args.outputdir + "Formatted/" + args.domain + "_nmap.json"
+    masscan_json = args.outputdir  + args.domain + "/Formatted/" + args.domain + "_massscan.json"
+    nmap_json = args.outputdir  + args.domain + "/Formatted/" + args.domain + "_nmap.json"
     if args.masscan and args.nmap:
         with open(masscan_json,"r") as fmassscan_json,open(nmap_json,"r") as fnmap_json:
             data_masscan = json.load(fmassscan_json)
@@ -125,7 +156,7 @@ def agregate_data_stage3(ipDataList,args):
     """
     new_ipDataList = ipDataList
     if args.nrich:
-        with open(args.outputdir + "Formatted/nrich_" + args.domain + ".json") as f_nrich:
+        with open(args.outputdir + args.domain + "/Formatted/nrich_" + args.domain + ".json") as f_nrich:
             data_nrich = json.load(f_nrich)
 
         for ipData in new_ipDataList:
@@ -144,7 +175,7 @@ def agregate_data_stage3(ipDataList,args):
     return new_ipDataList
 
 def write_to_xls_s3(data,args):
-    workbook = xlsxwriter.Workbook('Recon_' + args.domain +'.xlsx')
+    workbook = xlsxwriter.Workbook(args.outputdir + args.domain + '/Recon_' + args.domain +'.xlsx')
     worksheet = workbook.add_worksheet('Recon')
     wrap_format = workbook.add_format({'text_wrap':True})
     title_format = workbook.add_format({'bold':True,'align':'center','bg_color':"#D9D9D9"})
@@ -170,18 +201,18 @@ def write_to_xls_s3(data,args):
         else:
             worksheet.write(row, column, entry.domains + "\n")
 
-        # Write the tags
-        column += 1
-        worksheet.write(row, column, "\n".join(entry.tags))
-        # Write the CPEs
-        column += 1
-        worksheet.write(row,column,"\n".join(entry.cpes))
         # Write the ports
         column += 1
         worksheet.write(row, column, "\n".join(entry.ipPorts), wrap_format)
+        # Write the CPEs
+        column += 1
+        worksheet.write(row,column,"\n".join(entry.cpes))
+        # Write the tags
+        column += 1
+        worksheet.write(row, column, "\n".join(entry.tags))
         # Write the Vulns
         column += 1
-        worksheet.write(row, column, "\n".join(entry.vulns))
+        worksheet.write(row, column, "\n".join(entry.vulns),wrap_format)
 
         row += 1
         column = 0
