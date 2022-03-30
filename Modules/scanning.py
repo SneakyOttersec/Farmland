@@ -3,18 +3,20 @@ import subprocess
 import xml.etree.ElementTree as ET
 import shutil
 import os
+from Modules.utils import *
 
-def exec_massscan_nmap(ip_list,args):
-    with open("tmp_ip.txt","w") as f:
-        for ip in ip_list:
-            f.write(ip[1] + "\n")
+def exec_massscan_nmap(data_stage1,args):
+    data_to_ip(data_stage1)
     # TODO : Arg massscan and nmap
-    answer_masscan = "n"
-    anwser_nmap = "n"
+    answer_masscan = args.skip
+    anwser_nmap = args.skip
     if args.masscan:
         if os.path.exists(args.outputdir + args.domain + "/Raw/" + args.domain + "_massscan.json"):
             print("[+] The masscan output seems to exist. Do you want do skip this step ? [y/n]")
-            answer_masscan = input()
+            if not answer_masscan:
+                answer_masscan = input()
+        else:
+            answer_masscan = "doesnotexist"
         if answer_masscan != "y":
             masscan = subprocess.Popen(("./Resources/Binary/masscan","-iL","tmp_ip.txt",
                                  "-p1-10000","--rate","10000","-oJ",args.outputdir  + args.domain + "/Raw/" + args.domain + "_massscan.json"))
@@ -22,10 +24,14 @@ def exec_massscan_nmap(ip_list,args):
             masscan.communicate()
             if not os.path.exists(args.outputdir + args.domain + "/Formatted/" + args.domain + "_massscan.json"):
                 convert_massscan_json(args)
+
     if args.nmap:
         if os.path.exists(args.outputdir + args.domain + "/Raw/" + args.domain + "_nmap.xml"):
             print("[+] The nmap output seems to exist. Do you want do skip this step ? [y/n]")
-            anwser_nmap = input()
+            if not anwser_nmap:
+                anwser_nmap = input()
+        else:
+            anwser_nmap ="doesnotexist"
         if anwser_nmap != "y":
             nmap = subprocess.Popen(("./Resources/Binary/nmap","--top-port","100","-iL", "tmp_ip.txt",
                                 "-oX", args.outputdir  + args.domain + "/Raw/" + args.domain + "_nmap.xml"))
@@ -42,7 +48,10 @@ def convert_massscan_json(args):
     # 1  We need to make the tuple into a 3d list
     # [domain , ip[], ports[]]
     ## Thus we need to iterate it ...
-    shutil.copy(args.outputdir + args.domain + "/Raw/" + args.domain + "_massscan.json",args.outputdir  + args.domain + "/Formatted/" + args.domain + "_massscan.json")
+    if os.path.exists(args.outputdir + args.domain + "/Raw/" + args.domain + "_massscan.json"):
+        shutil.copy(args.outputdir + args.domain + "/Raw/" + args.domain + "_massscan.json",args.outputdir  + args.domain + "/Formatted/" + args.domain + "_massscan.json")
+    else:
+        print("[!] Error while trying to format the raw masscan output to a json format. Most likely due to a missing file.")
     return True
 
 def convert_nmap_json(args):

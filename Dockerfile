@@ -13,7 +13,7 @@ RUN adduser --disabled-password --gecos "" ident \
     && apt-get install -yq apt-utils build-essential curl gcc \
        libbison-dev libcurl4-openssl-dev libgdbm-compat-dev libgdbm-dev \
        libgmp-dev libharfbuzz-dev libssl-dev libxml2-dev libxslt1-dev openssl \
-       readline-common git nano wget \
+       readline-common git nano wget nmap\
     && mkdir -p /src/ruby  \
     && cd /src/ruby \
     && curl -O https://cache.ruby-lang.org/pub/ruby/2.7/ruby-2.7.2.tar.gz \
@@ -44,6 +44,8 @@ RUN mkdir /tool/Output/ && \
 RUN mkdir /tool/Output/Raw && \
     mkdir /tool/Logs
 RUN pip3 install -r /tool/requirements.txt
+# Install Eyewitness
+RUN bash /tool/Resources/Scripts/EyeWitness/Python/setup/setup.sh
 
 ADD ./Resources/Binary/intrigue-ident/ /tool/Resources/Binary/ident
 RUN chown root /tool/Resources/Binary/massdns && \
@@ -56,4 +58,4 @@ RUN cd /tool/Resources/Binary/intrigue-ident && \
     && bundle install
 WORKDIR /tool
 #USER ident
-#ENTRYPOINT ["/tool/entrypoint.sh"]
+ENTRYPOINT ["/tool/entrypoint.sh"]

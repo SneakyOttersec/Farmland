@@ -6,11 +6,20 @@ import socket
 def exec_base_domain(args):
     """
     FUnction to return the resolved ip addr of the base domain
+    Include a connectivity check.
     :param args:
-    :return:
+    :return: True
     """
-    data = socket.gethostbyname_ex(args.domain)
-    return (data[0],data[2])
+    try:
+        resolvedip = socket.gethostbyname_ex(args.domain)
+        return (resolvedip[0], resolvedip[2])
+    except socket.gaierror:
+        print("[!] Error : Seems like you do not have a proper nameserver/internet connection. Aborting.")
+        exit()
+    except:
+        print("[!] Error : Unknown error. Aborting")
+        exit()
+    return True
 
 def exec_massdns_subbbrute(args):
     """
@@ -18,21 +27,27 @@ def exec_massdns_subbbrute(args):
     :param args: domain and output dir will be used. The domain is both used as the target (to generate the list) and part of the outputed filename
     :return: True
     """
-    answer_sublist = "n"
-    answer_massdns = "n"
+    answer_sublist = args.skip
+    answer_massdns = args.skip
 
     print("[+] Generating the sub domain list associated with the domain")
     if os.path.exists("Resources/Wordlists/"+ args.domain + "_fulldomain.txt"):
         print("[+] The subdomain list seems to exist. Do you want do skip this step ? [y/n]")
-        answer_sublist = input()
+        if not args.skip:
+            answer_sublist = input()
+    else:
+        answer_sublist = "doesnotexist"
     if answer_sublist != "y":
         with open("Resources/Wordlists/" + args.domain + "_fulldomain.txt", "w") as f_fulldomain:
-            subbrute = subprocess.Popen(("python3", "./Resources/Scripts/subbrute.py", args.wordlist, args.domain),
+            subbrute = subprocess.Popen(("python3", "./Resources/Scripts/subbrute.py", args.massdns_wordlist, args.domain),
                                         stdout=f_fulldomain)
         subbrute.communicate()
     if os.path.exists(args.outputdir + args.domain + "/Raw/" + args.domain +"_massdns_output.txt"):
         print("[+] The massdns output seems to exist. Do you want do skip this step ? [y/n]")
-        answer_massdns = input()
+        if not answer_sublist:
+            answer_massdns = input()
+    else:
+        answer_massdns = "doesnotexist"
     if answer_massdns != "y":
         print("[+] Launching massdns ...")
         massdns = subprocess.Popen(("./Resources/Binary/massdns", "-l", "./Logs/" + args.domain + "_massdns_eror.log",
@@ -49,52 +64,64 @@ def exec_massdns_subbbrute(args):
         convert_massdns_raw_to_json(args)
     return True
 
-def exec_crt_sh(args):
+def exec_dnsrecon(args):
     """
     Function to execute dnsrecon in order to parse the crt.sh website.
     :param args: domain and output dir will be used. The domain is both used as the target and part of the outputed filename
     Custom / Default output dir for all of our files
     :return: True
     """
-    # TODO : dnsrecon has trouble to output as csv, thus we are using the xml one.
-    answer_crt = "n"
-    print("[+] Search through the certificate transprency logs (e.g : crt.sh)")
-    if os.path.exists(args.outputdir + args.domain + "/Raw/" + args.domain + "_dnsrecon_crt.json"):
-        print("[+] The crt output seems to exist. Do you want do skip this step ? [y/n]")
-        answer_crt = input()
-    if answer_crt == "n":
-        crt = subprocess.Popen(("python3","./Resources/Scripts/dnsrecon/dnsrecon.py","-t","std,crt,bing","-d",args.domain,"-j",args.outputdir + args.domain + "/Raw/" + args.domain + "_dnsrecon_crt.json"),stdout=subprocess.DEVNULL)
-        crt.communicate()
-        if crt.stderr:
-            print("ERROR ERROR ")
-            print(crt.stderr)
-        print("[+] Certificate transprency searching finished.")
+    # Check if we already have a DNSRecon output AND that is not empty
+    answer_dnsrecon = args.skip
+    if os.path.exists(args.outputdir + args.domain + "/Raw/" + args.domain + "_dnsrecon_crt.raw"):
+        if os.path.getsize(args.outputdir + args.domain + "/Raw/" + args.domain + "_dnsrecon_crt.raw") > 0:
+            print("[+] The DNSRecon output seems to exist. Do you want do skip this step ? [y/n]")
+            if not args.skip:
+                answer_dnsrecon = input()
+    else:
+        answer_dnsrecon = "doesnotexist"
+    if answer_dnsrecon != "y":
+        with open(args.outputdir + args.domain + "/Raw/" + args.domain + "_dnsrecon_crt.raw","w") as dnsrecon_output:
+            print("[+] Launching DNSRecon ... ")
+            dnsrecon_args = "crt"
+            if args.dnsrecon_bing == True:
+                print("   [+] DNSRecon Bing search enabled")
+                dnsrecon_args += ",bing"
+            if args.dnsrecon_std == True:
+                print("   [+] DNSRecon Std search enabled")
+                dnsrecon_args += ",std"
+            try:
+                crt = subprocess.Popen(("python3","./Resources/Scripts/dnsrecon/dnsrecon.py","-t",dnsrecon_args,"-d",args.domain,"-n","8.8.8.8"),stdout=dnsrecon_output,stderr=None)
+                crt.communicate()
+            except:
+                print("[!] Unknown error while running dnsrecon")
 
-    #if os.path.exists(args.outputdir + args.domain + "/Formatted/" + args.domain + "_dnsrecon_crt.json"):
-    #    pass
-    #else:
-    #    print("here")
-    convert_crt_raw_json(args.domain,args)
+    convert_crt_raw_json(args)
     return True
 
-def convert_crt_raw_json(domain,args):
+def convert_crt_raw_json(args):
     """
-    Function to convert the raw output of dnsrecon to a properly formatted json.
-    :param domain: domain nam which will be part of the filename
-    :param outputdir: Custom / Default output dir for all of our files
-    :return: True
+    Will parse the raw output of crt in order to extract the A record with the domain / IP
+    May include the AAA/MX record ?
+    :param args: farmland args
+    :return:
     """
     crt_json = []
-    print("[+] Converting the raw output of dnsrecon to the json format")
-    with open(args.outputdir + args.domain + "/Formatted/" + domain + "_dnsrecon_crt.json","w") as f_json,open(args.outputdir + args.domain + "/Raw/" + domain + "_dnsrecon_crt.json") as f_raw:
-        data = json.load(f_raw)
-        for entry in data[1:]:
-            if entry["type"] == "A":
-                crt_json.append([entry['name'],entry['address']])
-            elif entry["type"] == "MX":
-                crt_json.append([entry['domain'], entry['address']])
-        json.dump(crt_json,f_json)
-    print("[+] Done converting.")
+    with open(args.outputdir + args.domain + "/Raw/" + args.domain + "_dnsrecon_crt.raw","r") as f_in, \
+        open(args.outputdir + args.domain + "/Formatted/" + args.domain + "_dnsrecon_crt.json","w") as f_out:
+        data = f_in.readlines()
+        for entry in data:
+            try:
+                if " A " in entry:
+                    splitted_entry = entry.split(" A ")[1].split(" ")
+                    crt_json.append([splitted_entry[0].rstrip(),splitted_entry[1].rstrip()])
+            except:
+                print("[!] Error : Could not parse the dnsrecon raw file. Continuing without the dnsrecon data.")
+                exit()
+        try:
+            json.dump(crt_json, f_out)
+        except:
+            print("[!] Error : Could not dump the dnrecon data into a json file. Continuing whithout the dnsrecon data.")
     return True
 
 def convert_massdns_raw_to_json(args):
@@ -106,10 +133,34 @@ def convert_massdns_raw_to_json(args):
     """
     massdns_json = []
     print("[+] Converting the raw output of massdns to the json format")
-    with open(args.outputdir + args.domain + "/Raw/" + args.domain + "_massdns_output.txt","r") as f_raw,open(args.outputdir + args.domain + "/Formatted/" + args.domain + "_massdns_output.json","w") as f_json:
-        for line in f_raw:
-            if line.split(" ")[1] == "A":
-                massdns_json.append([line.split(" ")[0].rstrip(".").rstrip(),line.split(" ")[2].rstrip(".").rstrip()])
-        json.dump(massdns_json,f_json)
+    try:
+        with open(args.outputdir + args.domain + "/Raw/" + args.domain + "_massdns_output.txt","r") as f_raw,open(args.outputdir + args.domain + "/Formatted/" + args.domain + "_massdns_output.json","w") as f_json:
+            for line in f_raw:
+                if line.split(" ")[1] == "A":
+                    massdns_json.append([line.split(" ")[0].rstrip(".").rstrip(),line.split(" ")[2].rstrip(".").rstrip()])
+            json.dump(massdns_json,f_json)
+        print("[+] Done converting.")
+    except:
+        print("[!] Error while converting the massdns raw output to a json while. Continuing whithout the massdns data.")
+    return True
+
+# This function should be useless from version 1.1
+def convert_crt_json_json(args):
+    """
+    Function to convert the raw output of dnsrecon to a properly formatted json.
+    :param domain: domain nam which will be part of the filename
+    :param outputdir: Custom / Default output dir for all of our files
+    :return: True
+    """
+    crt_json = []
+    print("[+] Converting the raw output of dnsrecon to the json format")
+    with open(args.outputdir + args.domain + "/Formatted/" + args.domain + "_dnsrecon_crt.json","w") as f_json,open(args.outputdir + args.domain + "/Raw/" + args.domain + "_dnsrecon_crt.json") as f_raw:
+        data = json.load(f_raw)
+        for entry in data[1:]:
+            if entry["type"] == "A":
+                crt_json.append([entry['name'],entry['address']])
+            elif entry["type"] == "MX":
+                crt_json.append([entry['domain'], entry['address']])
+        json.dump(crt_json,f_json)
     print("[+] Done converting.")
     return True
